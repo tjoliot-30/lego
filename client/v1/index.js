@@ -704,12 +704,3 @@ console.log('💰 Highest Potential Profitability:', profit.toFixed(2));
 // 🎯 LAST TODO: Save in localStorage
 // 1. Save MY_FAVORITE_DEALERS in the localStorage
 // 2. log the localStorage
-
-// We check if localStorage exists (it does in browsers like Chrome/Firefox)
-if (typeof localStorage !== 'undefined') {
-  localStorage.setItem('MY_FAVORITE_DEALERS', JSON.stringify(MY_FAVORITE_DEALERS));
-  console.log(' Saved to LocalStorage:', localStorage.getItem('MY_FAVORITE_DEALERS'));
-} else {
-  console.log('💾(LocalStorage not available in this environment)');
-}
-//up
