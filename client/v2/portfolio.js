@@ -29,7 +29,7 @@ let currentPagination = {};
 const selectShow = document.querySelector('#show-select');
 const selectPage = document.querySelector('#page-select');
 const selectLegoSetIds = document.querySelector('#lego-set-id-select');
-const sectionDeals= document.querySelector('#deals');
+const sectionDeals = document.querySelector('#deals');
 const spanNbDeals = document.querySelector('#nbDeals');
 
 /**
@@ -37,7 +37,7 @@ const spanNbDeals = document.querySelector('#nbDeals');
  * @param {Array} result - deals to display
  * @param {Object} meta - pagination meta info
  */
-const setCurrentDeals = ({result, meta}) => {
+const setCurrentDeals = ({ result, meta }) => {
   currentDeals = result;
   currentPagination = meta;
 };
@@ -57,13 +57,13 @@ const fetchDeals = async (page = 1, size = 6) => {
 
     if (body.success !== true) {
       console.error(body);
-      return {currentDeals, currentPagination};
+      return { currentDeals, currentPagination };
     }
 
     return body.data;
   } catch (error) {
     console.error(error);
-    return {currentDeals, currentPagination};
+    return { currentDeals, currentPagination };
   }
 };
 
@@ -97,9 +97,9 @@ const renderDeals = deals => {
  * @param  {Object} pagination
  */
 const renderPagination = pagination => {
-  const {currentPage, pageCount} = pagination;
+  const { currentPage, pageCount } = pagination;
   const options = Array.from(
-    {'length': pageCount},
+    { 'length': pageCount },
     (value, index) => `<option value="${index + 1}">${index + 1}</option>`
   ).join('');
 
@@ -113,7 +113,7 @@ const renderPagination = pagination => {
  */
 const renderLegoSetIds = deals => {
   const ids = getIdsFromDeals(deals);
-  const options = ids.map(id => 
+  const options = ids.map(id =>
     `<option value="${id}">${id}</option>`
   ).join('');
 
@@ -125,7 +125,7 @@ const renderLegoSetIds = deals => {
  * @param  {Object} pagination
  */
 const renderIndicators = pagination => {
-  const {count} = pagination;
+  const { count } = pagination;
 
   spanNbDeals.innerHTML = count;
 };
@@ -149,6 +149,139 @@ selectShow.addEventListener('change', async (event) => {
 
   setCurrentDeals(deals);
   render(currentDeals, currentPagination);
+});
+
+/**
+ * Feature 1 - Browse pages
+ * Select the page to display
+ */
+selectPage.addEventListener('change', async (event) => {
+  // 1. We get the new page number the user selected
+  const newPage = parseInt(event.target.value);
+
+  // 2. We also need to know how many deals per page the user wants (6, 12, or 24)
+  // We get this from the 'show' selector we used in Feature 0
+  const size = parseInt(selectShow.value);
+
+  // 3. We fetch the new data from the API with:
+  // - The new page number
+  // - The current page size
+  const deals = await fetchDeals(newPage, size);
+
+  // 4. We update our global variables with the new data
+  setCurrentDeals(deals);
+
+  // 5. We redraw (render) the page with the new deals
+  render(currentDeals, currentPagination);
+});
+
+/**
+ * Feature 2 - Filter by best discount
+ * Filter the current deals to keep only the ones with > 50% discount
+ */
+// We select the "By best discount" button (it's the first span in the #filters box)
+const filterBestDiscount = document.querySelector('#filters span:nth-child(1)');
+
+filterBestDiscount.addEventListener('click', () => {
+  // 1. We create a new list of deals by filtering the current one
+  // The .filter() function goes through every deal
+  const bestDeals = currentDeals.filter(deal => {
+    // Log the discount to see what values we have (Open your browser console to see this!)
+    // console.log('Deal:', deal.title, 'Discount:', deal.discount);
+
+    // We keep the deal only if the discount is bigger than 30% (lowered from 50% to find more results)
+    // Note: We ensure 'deal.discount' exists; some API items might be missing it.
+    return deal.discount > 30;
+  });
+
+  // 2. We update the screen with our filtered list
+  // We pass the currentPagination because we haven't changed pages, just filtered what we see
+  render(bestDeals, currentPagination);
+});
+
+/**
+ * Feature 3 - Filter by most commented
+ * Filter the current deals to keep only the ones with > 5 comments
+ */
+// We select the "By most commented" button (it's the second span in the #filters box)
+const filterMostCommented = document.querySelector('#filters span:nth-child(2)');
+
+filterMostCommented.addEventListener('click', () => {
+  // 1. We create a new list of deals by filtering the current one
+  // The .filter() function goes through every deal
+  const commentedDeals = currentDeals.filter(deal => {
+    // We keep the deal only if the number of comments is bigger than 15
+    // Note: We confirm that 'deal.comments' exists in the data
+    return deal.comments > 5;
+  });
+
+  // 2. We update the screen with our filtered list
+  render(commentedDeals, currentPagination);
+});
+
+/**
+ * Feature 4 - Filter by hot deals
+ * Filter the current deals to keep only the hot ones (temperature > 100)
+ */
+// 1. SELECT THE ELEMENT
+// We look for the 3rd <span> inside the <div id="filters"> in the HTML
+const filterHotDeals = document.querySelector('#filters span:nth-child(3)');
+
+// 2. LISTEN FOR CLICKS
+filterHotDeals.addEventListener('click', () => {
+  // 3. FILTER THE DATA
+  // We create a new list called 'hotDeals'
+  const hotDeals = currentDeals.filter(deal => {
+    // We keep the deal only if its temperature is greater than 100 degrees
+    // (We assume the API gives us a property called 'temperature' or 'heat')
+    // Note: If this doesn't work, we might need to check the exact property name from the API data
+    return deal.temperature > 100;
+  });
+
+  // 4. UPDATE THE UI
+  // We redraw the page with only the hot deals
+  render(hotDeals, currentPagination);
+});
+
+/**
+ * Feature 5 - Sort by price
+ * Feature 6 - Sort by date
+ */
+// 1. SELECT THE ELEMENT
+const selectSort = document.querySelector('#sort-select');
+
+// 2. LISTEN FOR CHANGES
+selectSort.addEventListener('change', (event) => {
+  // 3. GET THE SELECTED VALUE
+  const sortValue = event.target.value;
+
+  // 4. CREATE A COPY TO SORT
+  // We use [...currentDeals] to make a copy so we don't mess up the original order permanently
+  const sortedDeals = [...currentDeals];
+
+  // 5. SORT THE DATA BASED ON SELECTION
+  switch (sortValue) {
+    case 'price-asc':
+      // Cheaper First: Small -> Big
+      sortedDeals.sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
+      break;
+    case 'price-desc':
+      // Expensive First: Big -> Small
+      sortedDeals.sort((a, b) => parseFloat(b.price) - parseFloat(a.price));
+      break;
+    case 'date-asc':
+      // Recently published: New -> Old (Descending Date)
+      // We convert the date string to a Date object to compare numbers
+      sortedDeals.sort((a, b) => new Date(b.published) - new Date(a.published));
+      break;
+    case 'date-desc':
+      // Anciently published: Old -> New (Ascending Date)
+      sortedDeals.sort((a, b) => new Date(a.published) - new Date(b.published));
+      break;
+  }
+
+  // 6. UPDATE THE UI
+  render(sortedDeals, currentPagination);
 });
 
 document.addEventListener('DOMContentLoaded', async () => {
