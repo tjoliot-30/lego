@@ -284,6 +284,45 @@ selectSort.addEventListener('change', (event) => {
   render(sortedDeals, currentPagination);
 });
 
+/**
+ * Feature 7 - Display Vinted sales
+ * Fetch and display sales from Vinted when a Lego Set ID is selected
+ */
+
+// 1. function to fetch sales from the API
+const fetchSales = async (id) => {
+  try {
+    const response = await fetch(`https://lego-api-blue.vercel.app/sales?id=${id}`);
+    const body = await response.json();
+
+    if (body.success !== true) {
+      console.error(body);
+      return { result: [], meta: {} };
+    }
+
+    return body.data;
+  } catch (error) {
+    console.error(error);
+    return { result: [], meta: {} };
+  }
+};
+
+// 2. LISTEN FOR CHANGES
+selectLegoSetIds.addEventListener('change', async (event) => {
+  // 3. GET THE SELECTED ID
+  const legoSetId = event.target.value;
+
+  // 4. FETCH THE DATA
+  const salesData = await fetchSales(legoSetId);
+
+  // 5. UPDATE THE UI
+  // We replace the current deals on screen with the sales we just fetched.
+  // The 'render' function doesn't care if it's a Deal or a Sale, as long as it has a title and price!
+  setCurrentDeals(salesData);
+
+  render(currentDeals, currentPagination);
+});
+
 document.addEventListener('DOMContentLoaded', async () => {
   const deals = await fetchDeals();
 
