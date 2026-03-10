@@ -31,6 +31,13 @@ const selectPage = document.querySelector('#page-select');
 const selectLegoSetIds = document.querySelector('#lego-set-id-select');
 const sectionDeals = document.querySelector('#deals');
 const spanNbDeals = document.querySelector('#nbDeals');
+// Feature 8 - SELECT THE ELEMENT
+const spanNbSales = document.querySelector('#nbSales');
+// Feature 9 - SELECT THE ELEMENTS
+const spanAverage = document.querySelector('#average');
+const spanP5 = document.querySelector('#p5');
+const spanP25 = document.querySelector('#p25');
+const spanP50 = document.querySelector('#p50');
 
 /**
  * Set global value
@@ -315,10 +322,53 @@ selectLegoSetIds.addEventListener('change', async (event) => {
   // 4. FETCH THE DATA
   const salesData = await fetchSales(legoSetId);
 
+  // We want to include the deals for this ID that are currently displayed
+  const dealsForId = currentDeals.filter(deal => String(deal.id) === String(legoSetId));
+  const combinedItems = [...dealsForId, ...(salesData.result || [])];
+
   // 5. UPDATE THE UI
-  // We replace the current deals on screen with the sales we just fetched.
+  // We replace the current deals on screen with the combined items we just got.
   // The 'render' function doesn't care if it's a Deal or a Sale, as long as it has a title and price!
-  setCurrentDeals(salesData);
+  setCurrentDeals({ result: combinedItems, meta: salesData.meta || {} });
+
+  // Feature 8 - Update the Number of Sales in the UI
+  // The 'result' array inside salesData contains all our sales, so we just count its length
+  spanNbSales.innerHTML = salesData.result ? salesData.result.length : 0;
+
+  // Feature 9 - Calculate average, p5, p25, p50
+  if (combinedItems.length > 0) {
+    // 1. Create a list of just the prices and turn them into numbers
+    const prices = combinedItems.map(item => parseFloat(item.price));
+
+    // 2. Calculate Average
+    let totalSum = 0;
+    for (let i = 0; i < prices.length; i++) {
+      totalSum = totalSum + prices[i];
+    }
+    const average = totalSum / prices.length;
+    spanAverage.innerHTML = average.toFixed(2); // Keep 2 decimal numbers
+
+    // 3. For percentiles, we MUST sort the prices from lowest to highest
+    prices.sort((a, b) => a - b);
+
+    // 4. Calculate p5 (5% of the list)
+    const p5Index = Math.floor(prices.length * 0.05);
+    spanP5.innerHTML = prices[p5Index];
+
+    // 5. Calculate p25 (25% of the list)
+    const p25Index = Math.floor(prices.length * 0.25);
+    spanP25.innerHTML = prices[p25Index];
+
+    // 6. Calculate p50 (50% of the list - the median)
+    const p50Index = Math.floor(prices.length * 0.50);
+    spanP50.innerHTML = prices[p50Index];
+  } else {
+    // If there are no data, just set it to 0
+    spanAverage.innerHTML = 0;
+    spanP5.innerHTML = 0;
+    spanP25.innerHTML = 0;
+    spanP50.innerHTML = 0;
+  }
 
   render(currentDeals, currentPagination);
 });
