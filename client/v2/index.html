@@ -3,78 +3,98 @@
 
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="style.css" />
   <title>🧱 Lego | Predictability of a lego set deal</title>
 </head>
 
 <body>
-  <h1>Lego</h1>
-  <section id="options">
-    <div id="show">
-      <label for="show-select">Show:</label>
-      <select name="show" id="show-select">
-        <option value="6">6</option>
-        <option value="12">12</option>
-        <option value="24">24</option>
-      </select>
+  <div class="container">
+    <header>
+      <div class="brand-title">
+        <h1>🧱 Lego</h1>
+      </div>
+      <button class="best-deals-btn" id="best-deals-btn">Show Best Deals</button>
+    </header>
+
+    <section id="options">
+    <div class="controls">
+      <div id="show" class="control-group">
+        <label for="show-select">Show:</label>
+        <select name="show" id="show-select">
+          <option value="6">6</option>
+          <option value="12">12</option>
+          <option value="24">24</option>
+        </select>
+      </div>
+      <div id="page" class="control-group">
+        <label for="page-select">Go to page:</label>
+        <select name="page" id="page-select"> </select>
+      </div>
+      <div id="sort" class="control-group">
+        <label for="sort-select">Sort:</label>
+        <select name="sort" id="sort-select">
+          <option value="price-asc">Cheaper</option>
+          <option value="price-desc">Expensive</option>
+          <option value="date-asc">Recently published</option>
+          <option value="date-desc">Anciently published</option>
+          <option value="profit-desc">Best Profit Ratio</option>
+        </select>
+      </div>
     </div>
-    <div id="page">
-      <label for="page-select">Go to page:</label>
-      <select name="page" id="page-select"> </select>
-    </div>
-    <div id="filters">
+    <div id="filters" class="filters-bar">
       <span>By best discount</span>
       <span>By most commented</span>
       <span>By hot deals</span>
-    </div>
-    <div id="sort">
-      <label for="sort-select">Sort:</label>
-      <select name="sort" id="sort-select">
-        <option value="price-asc">Cheaper</option>
-        <option value="price-desc">Expensive</option>
-        <option value="date-asc">Recently published</option>
-        <option value="date-desc">Anciently published</option>
-      </select>
+      <span>By favorites</span>
+      <span>Clear Filters</span>
     </div>
   </section>
   <section id="lego">
     <h2>Lego sets</h2>
-    <div>
+    <div class="control-group" style="max-width: 300px;">
       <label>Lego set id:</label>
       <select id="lego-set-id-select"></select>
     </div>
   </section>
   <section id="indicators">
     <h2>Indicators</h2>
-    <div>
-      <span>Number of deals</span>
-      <span id="nbDeals">0</span>
-    </div>
-    <div>
-      <span>Number of sales</span>
-      <span id="nbSales">0</span>
-    </div>
-    <div>
-      <span>Average sales price value</span>
-      <span id="average">0</span>
-    </div>
-    <div>
-      <span>p5 sales price value</span>
-      <span id="p5">0</span>
-    </div>
-    <div>
-      <span>p25 sales price value</span>
-      <span id="p25">0</span>
-    </div>
-    <div>
-      <span>p50 sales price value</span>
-      <span id="p50">0</span>
-    </div>
-    <div>
-      <span>Lifetime value</span>
-      <span>10 days</span>
+    <div class="indicators-grid">
+      <div class="indicator-card">
+        <div class="indicator-label">Number of deals</div>
+        <div class="indicator-value" id="nbDeals">0</div>
+      </div>
+      <div class="indicator-card">
+        <div class="indicator-label">Number of sales</div>
+        <div class="indicator-value" id="nbSales">0</div>
+      </div>
+      <div class="indicator-card">
+        <div class="indicator-label">Avg sales price</div>
+        <div class="indicator-value" id="average">0</div>
+      </div>
+      <div class="indicator-card">
+        <div class="indicator-label">p5 sales price</div>
+        <div class="indicator-value" id="p5">0</div>
+      </div>
+      <div class="indicator-card">
+        <div class="indicator-label">p25 sales price</div>
+        <div class="indicator-value" id="p25">0</div>
+      </div>
+      <div class="indicator-card">
+        <div class="indicator-label">p50 sales price</div>
+        <div class="indicator-value" id="p50">0</div>
+      </div>
+      <div class="indicator-card">
+        <div class="indicator-label">Lifetime value</div>
+        <div class="indicator-value" id="lifetime">0 days</div>
+      </div>
     </div>
   </section>
-  <section id="deals"></section>
+  <section id="deals-section">
+    <div id="algo-details" style="display: none; background-color: #2b2b2b; padding: 20px; border-radius: 8px; border-left: 5px solid var(--lego-red); border-bottom: 3px solid var(--lego-yellow); margin-bottom: 20px;"></div>
+    <div id="deals" class="deals-grid"></div>
+  </section>
+  </div>
   <script type="text/javascript" charset="UTF-8" src="utils.js"></script>
   <script type="text/javascript" charset="UTF-8" src="portfolio.js"></script>
 </body>

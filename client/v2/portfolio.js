@@ -24,6 +24,7 @@ This endpoint accepts the following optional query string parameters:
 // current deals on the page
 let currentDeals = [];
 let currentPagination = {};
+let favoriteDeals = JSON.parse(localStorage.getItem('favoriteDeals')) || [];
 
 // instantiate the selectors
 const selectShow = document.querySelector('#show-select');
@@ -38,6 +39,7 @@ const spanAverage = document.querySelector('#average');
 const spanP5 = document.querySelector('#p5');
 const spanP25 = document.querySelector('#p25');
 const spanP50 = document.querySelector('#p50');
+const spanLifetime = document.querySelector('#lifetime');
 
 /**
  * Set global value
@@ -80,23 +82,43 @@ const fetchDeals = async (page = 1, size = 6) => {
  */
 const renderDeals = deals => {
   const fragment = document.createDocumentFragment();
-  const div = document.createElement('div');
+  // Don't wrap all deals in a single div snippet, insert them directly into grid
   const template = deals
     .map(deal => {
+      const isFavorite = favoriteDeals.some(d => d.uuid === deal.uuid);
+      const favIcon = isFavorite ? '❤️' : '🤍';
+      
+      const photoUrl = deal.photo || 'https://via.placeholder.com/300x200?text=No+Image';
+      const temperatureHtml = deal.temperature ? `<span class="heat">🔥 ${deal.temperature}°</span>` : '';
+      const discountHtml = deal.discount ? `<span class="discount-badge">-${deal.discount}%</span>` : '';
+      const retailHtml = deal.retail ? `<span class="retail">${deal.retail}€</span>` : '';
+      const scoreBadge = deal.score ? `<div style="background-color: var(--lego-yellow); color: #121212; padding: 4px 8px; border-radius: 4px; font-weight: bold; margin-bottom: 10px; display: inline-block;">Score: ${Math.round(deal.score)}</div>` : '';
+
       return `
-      <div class="deal" id=${deal.uuid}>
-        <span>${deal.id}</span>
-        <a href="${deal.link}">${deal.title}</a>
-        <span>${deal.price}</span>
+      <div class="deal-card" id=${deal.uuid}>
+        <img src="${photoUrl}" alt="${deal.title}" class="deal-image">
+        <div class="deal-content">
+          <div>${scoreBadge}</div>
+          <a href="${deal.link}" target="_blank" class="deal-title">${deal.title}</a>
+          <div class="deal-meta">
+            <span>ID: ${deal.id}</span>
+            ${temperatureHtml}
+          </div>
+          <div class="deal-price-row">
+            <span class="price">${deal.price}€</span>
+            ${retailHtml}
+            ${discountHtml}
+          </div>
+          <div class="actions">
+            <button class="favorite-btn" data-uuid="${deal.uuid}">${favIcon}</button>
+          </div>
+        </div>
       </div>
     `;
     })
     .join('');
 
-  div.innerHTML = template;
-  fragment.appendChild(div);
-  sectionDeals.innerHTML = '<h2>Deals</h2>';
-  sectionDeals.appendChild(fragment);
+  sectionDeals.innerHTML = template;
 };
 
 /**
@@ -285,6 +307,13 @@ selectSort.addEventListener('change', (event) => {
       // Anciently published: Old -> New (Ascending Date)
       sortedDeals.sort((a, b) => new Date(a.published) - new Date(b.published));
       break;
+    case 'profit-desc':
+      sortedDeals.sort((a, b) => {
+        const profitA = a.discount || (a.retail ? ((a.retail - a.price) / a.retail * 100) : 0);
+        const profitB = b.discount || (b.retail ? ((b.retail - b.price) / b.retail * 100) : 0);
+        return profitB - profitA;
+      });
+      break;
   }
 
   // 6. UPDATE THE UI
@@ -335,6 +364,16 @@ selectLegoSetIds.addEventListener('change', async (event) => {
   // The 'result' array inside salesData contains all our sales, so we just count its length
   spanNbSales.innerHTML = salesData.result ? salesData.result.length : 0;
 
+  // Feature 10 - Lifetime value
+  if (combinedItems.length > 0) {
+    const minDate = Math.min(...combinedItems.map(item => item.published));
+    const maxDate = Math.max(...combinedItems.map(item => item.published));
+    const lifetime = Math.round((maxDate - minDate) / (60 * 60 * 24));
+    spanLifetime.innerHTML = `${Math.max(0, lifetime)} days`;
+  } else {
+    spanLifetime.innerHTML = `0 days`;
+  }
+
   // Feature 9 - Calculate average, p5, p25, p50
   if (combinedItems.length > 0) {
     // 1. Create a list of just the prices and turn them into numbers
@@ -371,6 +410,120 @@ selectLegoSetIds.addEventListener('change', async (event) => {
   }
 
   render(currentDeals, currentPagination);
+});
+
+/**
+ * Feature 14 - Filter by favorite
+ */
+const filterFavorite = document.querySelector('#filters span:nth-child(4)');
+
+filterFavorite.addEventListener('click', () => {
+  render(favoriteDeals, currentPagination);
+});
+
+/**
+ * Clear Filters
+ */
+const clearFilters = document.querySelector('#filters span:nth-child(5)');
+clearFilters.addEventListener('click', async () => {
+  // Re-fetch using original pagination values or just re-render current state without filters
+  const deals = await fetchDeals(currentPagination.currentPage, parseInt(selectShow.value));
+  setCurrentDeals(deals);
+  
+  const algoDetails = document.getElementById('algo-details');
+  if (algoDetails) algoDetails.style.display = 'none';
+
+  render(currentDeals, currentPagination);
+});
+
+/**
+ * Best Deals Button
+ */
+const salesDataCache = {};
+
+const bestDealsBtn = document.querySelector('#best-deals-btn');
+bestDealsBtn.addEventListener('click', async () => {
+  sectionDeals.innerHTML = '<p style="text-align:center;font-size:1.2rem;color:var(--lego-yellow);">⚙️ Calculating Lego Algorithm... Crunching API details...</p>';
+
+  // Fetch unique sales details to compute lifetime and actual Vinted popularity
+  const uniqueIds = [...new Set(currentDeals.map(d => d.id))];
+  for (const id of uniqueIds) {
+    if (!salesDataCache[id]) {
+      const sales = await fetchSales(id);
+      salesDataCache[id] = sales.result || [];
+    }
+  }
+
+  // Calculate scores based on algorithmic weights
+  const scoredDeals = currentDeals.map(deal => {
+    const sales = salesDataCache[deal.id] || [];
+    
+    const profitRatio = deal.discount || (deal.retail ? ((deal.retail - deal.price) / deal.retail * 100) : 0);
+    const nbSales = sales.length;
+    
+    let lifetime = 0;
+    if (sales.length > 0) {
+      const allDates = [...sales.map(s => s.published), deal.published];
+      const minDate = Math.min(...allDates);
+      const maxDate = Math.max(...allDates);
+      lifetime = Math.round((maxDate - minDate) / (60 * 60 * 24));
+    } else {
+      lifetime = 365; // Penalize lack of sales
+    }
+    const lifetimeScore = Math.max(0, 30 - lifetime); // Max score 30
+    const heatScore = (deal.temperature || 0) / 10;
+    const commentScore = (deal.comments || 0);
+
+    const score = (profitRatio * 1.5) + (nbSales * 2.0) + (lifetimeScore * 1.0) + (heatScore * 2.0) + (commentScore * 0.5);
+    
+    return { ...deal, score };
+  });
+
+  scoredDeals.sort((a, b) => b.score - a.score);
+
+  const algoDetails = document.getElementById('algo-details');
+  if (algoDetails) {
+    algoDetails.style.display = 'block';
+    algoDetails.innerHTML = `
+      <h3 style="color:var(--lego-red); margin-top:0;">📊 Algorithm Deep Dive: How the Score is Calculated</h3>
+      <p style="margin-bottom:10px;">We've analyzed your current view and ranked the sets out of 100+ points using the following metrics (sorted by score):</p>
+      <ul style="line-height:1.6; color:var(--text-main);">
+        <li><strong style="color:var(--lego-yellow)">Profit Proportion (x1.5):</strong> Deals natively priced lower than their retail worth grab an active profitability boost.</li>
+        <li><strong style="color:var(--lego-yellow)">Number of Sales (x2.0):</strong> We actively pinged Vinted! Sets that feature higher actual sales volume are highly boosted. High volume = massive brand interest!</li>
+        <li><strong style="color:var(--lego-yellow)">Lifetime Value Velocity (x1.0):</strong> Sets that were pushed online recently and sold easily score high. If no one buys it (0 sales within 365 days) it gets drastically penalized.</li>
+        <li><strong style="color:var(--lego-yellow)">Temperature / Heat (x0.2):</strong> A raw indicator of the Dealabs community hype metrics.</li>
+        <li><strong style="color:var(--lego-yellow)">Community Support (x0.5):</strong> The raw number of comments attached natively to this deal listing.</li>
+      </ul>
+    `;
+  }
+
+  // Update select to reflect this behavior manually
+  if (selectSort.querySelector('option[value="profit-desc"]')) {
+     selectSort.value = 'profit-desc';
+  }
+  
+  render(scoredDeals, currentPagination);
+});
+
+/**
+ * Feature 13 - Save as favorite
+ */
+sectionDeals.addEventListener('click', (event) => {
+  if (event.target.classList.contains('favorite-btn')) {
+    const uuid = event.target.dataset.uuid;
+    const isFavorite = favoriteDeals.some(d => d.uuid === uuid);
+    if (isFavorite) {
+      favoriteDeals = favoriteDeals.filter(d => d.uuid !== uuid);
+      event.target.innerHTML = '🤍';
+    } else {
+      const dealToAdd = currentDeals.find(d => d.uuid === uuid) || favoriteDeals.find(d => d.uuid === uuid);
+      if (dealToAdd) {
+        favoriteDeals.push(dealToAdd);
+        event.target.innerHTML = '❤️';
+      }
+    }
+    localStorage.setItem('favoriteDeals', JSON.stringify(favoriteDeals));
+  }
 });
 
 document.addEventListener('DOMContentLoaded', async () => {

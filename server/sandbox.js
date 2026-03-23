@@ -2,7 +2,7 @@
 import * as avenuedelabrique from './websites/avenuedelabrique.js';
 import * as vinted from './websites/vinted.js';
 
-async function scrapeADLB (website = 'https://www.avenuedelabrique.com/promotions-et-bons-plans-lego') {
+async function scrapeADLB(website = 'https://www.avenuedelabrique.com/promotions-et-bons-plans-lego') {
   try {
     console.log(`🕵️‍♀️  browsing ${website} website`);
 
@@ -17,7 +17,7 @@ async function scrapeADLB (website = 'https://www.avenuedelabrique.com/promotion
   }
 }
 
-async function scrapeVinted (lego) {
+async function scrapeVinted(lego) {
   try {
     console.log(`🕵️‍♀️  scraping lego ${lego} from vinted.fr`);
 
@@ -33,7 +33,7 @@ async function scrapeVinted (lego) {
 }
 
 
-const [,, param] = process.argv;
+const [, , param] = process.argv;
 
 scrapeADLB(param);
 //scrapeVinted(param)
