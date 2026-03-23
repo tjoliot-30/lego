@@ -60,7 +60,7 @@ const setCurrentDeals = ({ result, meta }) => {
 const fetchDeals = async (page = 1, size = 6) => {
   try {
     const response = await fetch(
-      `https://lego-api-blue.vercel.app/deals?page=${page}&size=${size}`
+      `http://localhost:8092/deals/search?limit=${size}`
     );
     const body = await response.json();
 
@@ -88,7 +88,12 @@ const renderDeals = deals => {
       const isFavorite = favoriteDeals.some(d => d.uuid === deal.uuid);
       const favIcon = isFavorite ? '❤️' : '🤍';
       
-      const photoUrl = deal.photo || 'https://via.placeholder.com/300x200?text=No+Image';
+      // Primary photo from scraper
+      const primaryPhoto = deal.photo;
+      // Fallback photo from Brickset (predictable CDN)
+      const fallbackPhoto = deal.id ? `https://images.brickset.com/sets/images/${deal.id}-1.jpg` : 'https://via.placeholder.com/300x200?text=No+Image';
+      
+      const photoUrl = primaryPhoto || fallbackPhoto;
       const temperatureHtml = deal.temperature ? `<span class="heat">🔥 ${deal.temperature}°</span>` : '';
       const discountHtml = deal.discount ? `<span class="discount-badge">-${deal.discount}%</span>` : '';
       const retailHtml = deal.retail ? `<span class="retail">${deal.retail}€</span>` : '';
@@ -96,7 +101,7 @@ const renderDeals = deals => {
 
       return `
       <div class="deal-card" id=${deal.uuid}>
-        <img src="${photoUrl}" alt="${deal.title}" class="deal-image">
+        <img src="${photoUrl}" alt="${deal.title}" class="deal-image" onerror="this.onerror=null;this.src='https://images.brickset.com/sets/images/${deal.id}-1.jpg';">
         <div class="deal-content">
           <div>${scoreBadge}</div>
           <a href="${deal.link}" target="_blank" class="deal-title">${deal.title}</a>
@@ -328,7 +333,7 @@ selectSort.addEventListener('change', (event) => {
 // 1. function to fetch sales from the API
 const fetchSales = async (id) => {
   try {
-    const response = await fetch(`https://lego-api-blue.vercel.app/sales?id=${id}`);
+    const response = await fetch(`http://localhost:8092/sales/search?legoSetId=${id}`);
     const body = await response.json();
 
     if (body.success !== true) {
@@ -353,19 +358,20 @@ selectLegoSetIds.addEventListener('change', async (event) => {
 
   // We want to include the deals for this ID that are currently displayed
   const dealsForId = currentDeals.filter(deal => String(deal.id) === String(legoSetId));
-  const combinedItems = [...dealsForId, ...(salesData.result || [])];
 
-  // 5. UPDATE THE UI
-  // We replace the current deals on screen with the combined items we just got.
+  // Indicators and statistics should rely ONLY on Vinted data (salesData.result)
+  const combinedItems = salesData.result || [];
+  
+  // We keep the deals for the ID for the main display, but statistics use Vinted only
   // The 'render' function doesn't care if it's a Deal or a Sale, as long as it has a title and price!
-  setCurrentDeals({ result: combinedItems, meta: salesData.meta || {} });
+  setCurrentDeals({ result: [...dealsForId, ...combinedItems], meta: salesData.meta || {} });
 
   // Feature 8 - Update the Number of Sales in the UI
   // The 'result' array inside salesData contains all our sales, so we just count its length
   spanNbSales.innerHTML = salesData.result ? salesData.result.length : 0;
 
   // Feature 10 - Lifetime value
-  if (combinedItems.length > 0) {
+  if (combinedItems.length > 1) {
     const minDate = Math.min(...combinedItems.map(item => item.published));
     const maxDate = Math.max(...combinedItems.map(item => item.published));
     const lifetime = Math.round((maxDate - minDate) / (60 * 60 * 24));
@@ -373,40 +379,25 @@ selectLegoSetIds.addEventListener('change', async (event) => {
   } else {
     spanLifetime.innerHTML = `0 days`;
   }
-
+  
   // Feature 9 - Calculate average, p5, p25, p50
   if (combinedItems.length > 0) {
-    // 1. Create a list of just the prices and turn them into numbers
     const prices = combinedItems.map(item => parseFloat(item.price));
+    
+    // Average
+    const average = prices.reduce((a, b) => a + b, 0) / prices.length;
+    spanAverage.innerHTML = average.toFixed(2);
 
-    // 2. Calculate Average
-    let totalSum = 0;
-    for (let i = 0; i < prices.length; i++) {
-      totalSum = totalSum + prices[i];
-    }
-    const average = totalSum / prices.length;
-    spanAverage.innerHTML = average.toFixed(2); // Keep 2 decimal numbers
-
-    // 3. For percentiles, we MUST sort the prices from lowest to highest
+    // Percentiles
     prices.sort((a, b) => a - b);
-
-    // 4. Calculate p5 (5% of the list)
-    const p5Index = Math.floor(prices.length * 0.05);
-    spanP5.innerHTML = prices[p5Index];
-
-    // 5. Calculate p25 (25% of the list)
-    const p25Index = Math.floor(prices.length * 0.25);
-    spanP25.innerHTML = prices[p25Index];
-
-    // 6. Calculate p50 (50% of the list - the median)
-    const p50Index = Math.floor(prices.length * 0.50);
-    spanP50.innerHTML = prices[p50Index];
+    spanP5.innerHTML = prices[Math.floor(prices.length * 0.05)];
+    spanP25.innerHTML = prices[Math.floor(prices.length * 0.25)];
+    spanP50.innerHTML = prices[Math.floor(prices.length * 0.50)];
   } else {
-    // If there are no data, just set it to 0
-    spanAverage.innerHTML = 0;
-    spanP5.innerHTML = 0;
-    spanP25.innerHTML = 0;
-    spanP50.innerHTML = 0;
+    spanAverage.innerHTML = '0.00';
+    spanP5.innerHTML = '0.00';
+    spanP25.innerHTML = '0.00';
+    spanP50.innerHTML = '0.00';
   }
 
   render(currentDeals, currentPagination);
