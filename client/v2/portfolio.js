@@ -97,7 +97,7 @@ const renderDeals = deals => {
       const temperatureHtml = deal.temperature ? `<span class="heat">🔥 ${deal.temperature}°</span>` : '';
       const discountHtml = deal.discount ? `<span class="discount-badge">-${deal.discount}%</span>` : '';
       const retailHtml = deal.retail ? `<span class="retail">${deal.retail}€</span>` : '';
-      const scoreBadge = deal.score ? `<div style="background-color: var(--lego-yellow); color: #121212; padding: 4px 8px; border-radius: 4px; font-weight: bold; margin-bottom: 10px; display: inline-block;">Score: ${Math.round(deal.score)}</div>` : '';
+      const scoreBadge = (deal.score !== undefined) ? `<div style="background-color: var(--lego-yellow); color: #121212; padding: 4px 8px; border-radius: 4px; font-weight: bold; margin-bottom: 10px; display: inline-block;">Score: ${Math.round(deal.score)}</div>` : '';
 
       return `
       <div class="deal-card" id=${deal.uuid}>
@@ -370,12 +370,14 @@ selectLegoSetIds.addEventListener('change', async (event) => {
   // The 'result' array inside salesData contains all our sales, so we just count its length
   spanNbSales.innerHTML = salesData.result ? salesData.result.length : 0;
 
-  // Feature 10 - Lifetime value
-  if (combinedItems.length > 1) {
-    const minDate = Math.min(...combinedItems.map(item => item.published));
-    const maxDate = Math.max(...combinedItems.map(item => item.published));
-    const lifetime = Math.round((maxDate - minDate) / (60 * 60 * 24));
-    spanLifetime.innerHTML = `${Math.max(0, lifetime)} days`;
+  // Feature 10 - Lifetime value (Average days online)
+  const now = Math.floor(Date.now() / 1000);
+  const validDates = combinedItems.map(item => item.published).filter(d => typeof d === 'number' && !isNaN(d));
+
+  if (validDates.length > 0) {
+    const totalDaysOnline = validDates.reduce((sum, pub) => sum + (now - pub) / (60 * 60 * 24), 0);
+    const avgLifetime = Math.round(totalDaysOnline / validDates.length);
+    spanLifetime.innerHTML = `${Math.max(0, avgLifetime)} days`;
   } else {
     spanLifetime.innerHTML = `0 days`;
   }
@@ -453,13 +455,14 @@ bestDealsBtn.addEventListener('click', async () => {
     const nbSales = sales.length;
     
     let lifetime = 0;
-    if (sales.length > 0) {
-      const allDates = [...sales.map(s => s.published), deal.published];
+    const allDates = [...sales.map(s => s.published), deal.published].filter(d => typeof d === 'number' && !isNaN(d));
+    
+    if (allDates.length > 0) {
       const minDate = Math.min(...allDates);
       const maxDate = Math.max(...allDates);
       lifetime = Math.round((maxDate - minDate) / (60 * 60 * 24));
     } else {
-      lifetime = 365; // Penalize lack of sales
+      lifetime = 365; // Penalize lack of sales/dates
     }
     const lifetimeScore = Math.max(0, 30 - lifetime); // Max score 30
     const heatScore = (deal.temperature || 0) / 10;
