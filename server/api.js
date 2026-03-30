@@ -6,11 +6,11 @@ import helmet from 'helmet';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 import { scrape as scrapeVinted } from './websites/vinted.js';
-
 
 const PORT = 8092;
 
@@ -20,43 +20,80 @@ const app = express();
 let SALES = [];
 let DEALS = [];
 
+// Function to load local data
+const loadData = () => {
+  try {
+    const vintedPath = path.join(__dirname, 'sources', 'vinted.json');
+    let vintedRaw = JSON.parse(readFileSync(vintedPath, 'utf8'));
+    SALES = Array.isArray(vintedRaw) ? vintedRaw : Object.entries(vintedRaw).flatMap(([id, items]) =>
+      items.map(item => ({
+        ...item,
+        id,
+        'price': (item.price && item.price.amount) ? parseFloat(item.price.amount) : item.price
+      }))
+    );
+    console.log(`✅ Loaded ${SALES.length} sales`);
+  } catch (error) {
+    console.warn(`⚠️ Vinted data error: ${error.message}`);
+  }
+
+  try {
+    const dealsPath = path.join(__dirname, 'deals.json');
+    DEALS = JSON.parse(readFileSync(dealsPath, 'utf8'));
+    console.log(`✅ Loaded ${DEALS.length} deals`);
+  } catch (error) {
+    console.warn(`⚠️ Dealabs data error: ${error.message}`);
+  }
+};
+
+// INITIALIZE DATA
+loadData();
+
 app.use(bodyParser.json());
 app.use(cors());
 app.use(helmet());
-app.use(cors())
 
 app.get('/', (request, response) => {
-  response.send({'ack': true});
+  response.send({ 'ack': true, 'dealsCount': DEALS.length });
 });
 
-app.get('/deals/search', (request, response) => {
+app.get('/deals/search', async (request, response) => {
   try {
-    let { limit = 12, price, date, filterBy } = request.query;
+    let { limit = 12, page = 1, price, date, filterBy, legoSetId } = request.query;
     limit = parseInt(limit);
+    page = parseInt(page);
 
     let results = [...DEALS];
+
+    if (legoSetId) {
+      results = results.filter(deal => String(deal.id) === String(legoSetId) || String(deal.legoSetId) === String(legoSetId));
+    }
 
     if (price) {
       results = results.filter(deal => deal.price <= parseFloat(price));
     }
 
     if (date) {
-      // Assuming published is a timestamp in seconds
       const filterDate = new Date(date).getTime() / 1000;
       results = results.filter(deal => deal.published >= filterDate);
     }
 
     if (filterBy === 'best-discount') {
-      results.sort((a, b) => b.discount - a.discount);
+      results = results.filter(deal => (deal.discount || 0) >= 30);
+      results.sort((a, b) => (b.discount || 0) - (a.discount || 0));
     } else if (filterBy === 'most-commented') {
-      results.sort((a, b) => b.comments - a.comments);
+      results.sort((a, b) => (b.comments || 0) - (a.comments || 0));
     } else {
       results.sort((a, b) => a.price - b.price);
     }
 
     const total = results.length;
     const pageCount = Math.ceil(total / limit);
-    results = results.slice(0, limit);
+    
+    // Pagination slicing logic
+    const start = (page - 1) * limit;
+    const end = page * limit;
+    results = results.slice(start, end);
 
     return response.status(200).json({
       'success': true,
@@ -67,16 +104,16 @@ app.get('/deals/search', (request, response) => {
           limit,
           total,
           'count': total,
-          'currentPage': 1,
+          'currentPage': page,
           'pageCount': pageCount
         }
       }
     });
   } catch (error) {
     console.error(error);
-    return response.status(500).json({ 
-      'success': false, 
-      'data': { 'result': [], 'meta': {} } 
+    return response.status(500).json({
+      'success': false,
+      'data': { 'result': [], 'meta': {} }
     });
   }
 });
@@ -105,21 +142,18 @@ app.get('/sales/search', async (request, response) => {
     let results = [...SALES];
 
     if (legoSetId) {
-      const filterById = (list) => list.filter(sale => 
+      const filterById = (list) => list.filter(sale =>
         String(sale.id) === String(legoSetId)
       );
 
       results = filterById(results);
 
-      // Feature: If NO results found in SALES cache OR we want to refresh, try an on-demand scrape!
       if (results.length === 0) {
-        console.log(`🔍 No local sales for ${legoSetId}. Scraping Vinted on-demand...`);
+        console.log(`🔍 Scraping Vinted for ${legoSetId}...`);
         const scraped = await scrapeVinted(`Lego ${legoSetId}`);
         if (scraped && scraped.length > 0) {
-          // Filter scraped results too!
           const filteredScraped = filterById(scraped);
           results = filteredScraped;
-          // Optionally add all to global SALES so it's cached, avoiding UUID duplicates
           scraped.forEach(s => {
             if (!SALES.some(existing => existing.uuid === s.uuid)) {
               SALES.push(s);
@@ -129,7 +163,6 @@ app.get('/sales/search', async (request, response) => {
       }
     }
 
-    // Sort by date descending (assuming 'published' or similar)
     results.sort((a, b) => (b.published || 0) - (a.published || 0));
 
     const total = results.length;
@@ -159,35 +192,11 @@ app.get('/sales/search', async (request, response) => {
   }
 });
 
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    console.log(`📡 Server running locally at http://localhost:${PORT}`);
+  });
+}
 
-app.listen(PORT, () => {
-  // when we start the server we load available json files
-  try {
-    SALES = JSON.parse(
-      readFileSync(path.join(__dirname, 'sources', 'vinted.json'), 'utf8')
-    );
-    // If it's an object with keys as IDs, we might want to normalize it.
-    // But based on the example in md, it looks like an array in the output.
-    if (!Array.isArray(SALES)) {
-      SALES = Object.entries(SALES).flatMap(([id, items]) => 
-        items.map(item => ({
-          ...item, 
-          id, 
-          'price': item.price && item.price.amount ? parseFloat(item.price.amount) : item.price 
-        }))
-      );
-    }
-  } catch (error) {
-    console.warn(`⚠️ Vinted data not found: ${error}`);
-  }
-
-  try {
-    DEALS = JSON.parse(
-      readFileSync(path.join(__dirname, 'deals.json'), 'utf8')
-    );
-  } catch (error) {
-    console.warn(`⚠️ Dealabs data not found: ${error}`);
-  }
-})
-
-console.log(`📡 Running on port ${PORT}`);
+// Export for Vercel
+export default app;
