@@ -34,12 +34,13 @@ const sectionDeals = document.querySelector('#deals');
 const spanNbDeals = document.querySelector('#nbDeals');
 // Feature 8 - SELECT THE ELEMENT
 const spanNbSales = document.querySelector('#nbSales');
+const spanNbComments = document.querySelector('#nbComments');
 // Feature 9 - SELECT THE ELEMENTS
 const spanAverage = document.querySelector('#average');
 const spanP5 = document.querySelector('#p5');
 const spanP25 = document.querySelector('#p25');
 const spanP50 = document.querySelector('#p50');
-const spanLifetime = document.querySelector('#lifetime');
+// No more lifetime selector
 
 /**
  * Set global value
@@ -95,6 +96,7 @@ const renderDeals = deals => {
       
       const photoUrl = primaryPhoto || fallbackPhoto;
       const temperatureHtml = deal.temperature ? `<span class="heat">🔥 ${deal.temperature}°</span>` : '';
+      const commentHtml = deal.comments !== undefined ? `<span class="comments">💬 ${deal.comments}</span>` : '';
       const discountHtml = deal.discount ? `<span class="discount-badge">-${deal.discount}%</span>` : '';
       const retailHtml = deal.retail ? `<span class="retail">${deal.retail}€</span>` : '';
       const scoreBadge = (deal.score !== undefined) ? `<div style="background-color: var(--lego-yellow); color: #121212; padding: 4px 8px; border-radius: 4px; font-weight: bold; margin-bottom: 10px; display: inline-block;">Score: ${Math.round(deal.score)}</div>` : '';
@@ -108,6 +110,7 @@ const renderDeals = deals => {
           <div class="deal-meta">
             <span>ID: ${deal.id}</span>
             ${temperatureHtml}
+            ${commentHtml}
           </div>
           <div class="deal-price-row">
             <span class="price">${deal.price}€</span>
@@ -241,15 +244,8 @@ filterBestDiscount.addEventListener('click', () => {
 const filterMostCommented = document.querySelector('#filters span:nth-child(2)');
 
 filterMostCommented.addEventListener('click', () => {
-  // 1. We create a new list of deals by filtering the current one
-  // The .filter() function goes through every deal
-  const commentedDeals = currentDeals.filter(deal => {
-    // We keep the deal only if the number of comments is bigger than 15
-    // Note: We confirm that 'deal.comments' exists in the data
-    return deal.comments > 5;
-  });
-
-  // 2. We update the screen with our filtered list
+  // Sort from most comments to least
+  const commentedDeals = [...currentDeals].sort((a, b) => (b.comments || 0) - (a.comments || 0));
   render(commentedDeals, currentPagination);
 });
 
@@ -366,21 +362,9 @@ selectLegoSetIds.addEventListener('change', async (event) => {
   // The 'render' function doesn't care if it's a Deal or a Sale, as long as it has a title and price!
   setCurrentDeals({ result: [...dealsForId, ...combinedItems], meta: salesData.meta || {} });
 
-  // Feature 8 - Update the Number of Sales in the UI
-  // The 'result' array inside salesData contains all our sales, so we just count its length
+  // Feature 8 - Update the Number of Sales and Comments in the UI
   spanNbSales.innerHTML = salesData.result ? salesData.result.length : 0;
-
-  // Feature 10 - Lifetime value (Average days online)
-  const now = Math.floor(Date.now() / 1000);
-  const validDates = combinedItems.map(item => item.published).filter(d => typeof d === 'number' && !isNaN(d));
-
-  if (validDates.length > 0) {
-    const totalDaysOnline = validDates.reduce((sum, pub) => sum + (now - pub) / (60 * 60 * 24), 0);
-    const avgLifetime = Math.round(totalDaysOnline / validDates.length);
-    spanLifetime.innerHTML = `${Math.max(0, avgLifetime)} days`;
-  } else {
-    spanLifetime.innerHTML = `0 days`;
-  }
+  spanNbComments.innerHTML = dealsForId.reduce((sum, deal) => sum + (deal.comments || 0), 0);
   
   // Feature 9 - Calculate average, p5, p25, p50
   if (combinedItems.length > 0) {
@@ -421,10 +405,13 @@ const clearFilters = document.querySelector('#filters span:nth-child(5)');
 clearFilters.addEventListener('click', async () => {
   // Re-fetch using original pagination values or just re-render current state without filters
   const deals = await fetchDeals(currentPagination.currentPage, parseInt(selectShow.value));
-  setCurrentDeals(deals);
-  
-  const algoDetails = document.getElementById('algo-details');
-  if (algoDetails) algoDetails.style.display = 'none';
+  // Reset indicators
+  spanNbSales.innerHTML = 0;
+  spanNbComments.innerHTML = 0;
+  spanAverage.innerHTML = '0.00';
+  spanP5.innerHTML = '0.00';
+  spanP25.innerHTML = '0.00';
+  spanP50.innerHTML = '0.00';
 
   render(currentDeals, currentPagination);
 });
