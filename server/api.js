@@ -24,7 +24,7 @@ app.use(cors());
 app.use(helmet());
 
 app.get('/', (request, response) => {
-  response.send({'ack': true});
+  response.send({ 'ack': true });
 });
 
 app.get('/deals/search', async (request, response) => {
@@ -49,7 +49,7 @@ app.get('/deals/search', async (request, response) => {
     }
 
     if (filterBy === 'best-discount') {
-      results = results.filter(deal => (deal.discount || 0) >= 50);
+      results = results.filter(deal => (deal.discount || 0) >= 30);
       results.sort((a, b) => (b.discount || 0) - (a.discount || 0));
     } else if (filterBy === 'most-commented') {
       results.sort((a, b) => (b.comments || 0) - (a.comments || 0));
@@ -81,9 +81,9 @@ app.get('/deals/search', async (request, response) => {
     });
   } catch (error) {
     console.error(error);
-    return response.status(500).json({ 
-      'success': false, 
-      'data': { 'result': [], 'meta': {} } 
+    return response.status(500).json({
+      'success': false,
+      'data': { 'result': [], 'meta': {} }
     });
   }
 });
@@ -112,7 +112,7 @@ app.get('/sales/search', async (request, response) => {
     let results = [...SALES];
 
     if (legoSetId) {
-      const filterById = (list) => list.filter(sale => 
+      const filterById = (list) => list.filter(sale =>
         String(sale.id) === String(legoSetId)
       );
 
@@ -143,15 +143,6 @@ app.get('/sales/search', async (request, response) => {
     const pageCount = Math.ceil(total / limit);
     results = results.slice(0, limit);
 
-    let officialRetail = null;
-    if (legoSetId) {
-       try {
-         officialRetail = await fetchLegoRetail(legoSetId);
-       } catch (e) {
-         console.warn(`⚠️ Failed to fetch retail for ${legoSetId}: ${e.message}`);
-       }
-    }
-
     return response.status(200).json({
       'success': true,
       'data': {
@@ -162,8 +153,7 @@ app.get('/sales/search', async (request, response) => {
           total,
           'count': total,
           'currentPage': 1,
-          'pageCount': pageCount,
-          officialRetail
+          'pageCount': pageCount
         }
       }
     });
@@ -177,34 +167,37 @@ app.get('/sales/search', async (request, response) => {
 });
 
 
-app.listen(PORT, () => {
-  // when we start the server we load available json files
-  try {
-    SALES = JSON.parse(
-      readFileSync(path.join(__dirname, 'sources', 'vinted.json'), 'utf8')
-    );
-    // If it's an object with keys as IDs, we might want to normalize it.
-    // But based on the example in md, it looks like an array in the output.
-    if (!Array.isArray(SALES)) {
-      SALES = Object.entries(SALES).flatMap(([id, items]) => 
-        items.map(item => ({
-          ...item, 
-          id, 
-          'price': item.price && item.price.amount ? parseFloat(item.price.amount) : item.price 
-        }))
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    // when we start the server we load available json files
+    try {
+      SALES = JSON.parse(
+        readFileSync(path.join(__dirname, 'sources', 'vinted.json'), 'utf8')
       );
+      if (!Array.isArray(SALES)) {
+        SALES = Object.entries(SALES).flatMap(([id, items]) =>
+          items.map(item => ({
+            ...item,
+            id,
+            'price': item.price && item.price.amount ? parseFloat(item.price.amount) : item.price
+          }))
+        );
+      }
+    } catch (error) {
+      console.warn(`⚠️ Vinted data not found: ${error}`);
     }
-  } catch (error) {
-    console.warn(`⚠️ Vinted data not found: ${error}`);
-  }
 
-  try {
-    DEALS = JSON.parse(
-      readFileSync(path.join(__dirname, 'deals.json'), 'utf8')
-    );
-  } catch (error) {
-    console.warn(`⚠️ Dealabs data not found: ${error}`);
-  }
-})
+    try {
+      DEALS = JSON.parse(
+        readFileSync(path.join(__dirname, 'deals.json'), 'utf8')
+      );
+    } catch (error) {
+      console.warn(`⚠️ Dealabs data not found: ${error}`);
+    }
 
-console.log(`📡 Running on port ${PORT}`);
+    console.log(`📡 Running locally on port ${PORT}`);
+  });
+}
+
+// Export for Vercel
+export default app;

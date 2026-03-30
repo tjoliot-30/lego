@@ -3,7 +3,7 @@
 
 /**
 Description of the available api
-GET https://lego-api-blue.vercel.app/deals
+GET https://legoproject-5ioiubfoz-tjoliot-30s-projects.vercel.app/deals
 
 Search for specific deals
 
@@ -12,7 +12,7 @@ This endpoint accepts the following optional query string parameters:
 - `page` - page of deals to return
 - `size` - number of deals to return
 
-GET https://lego-api-blue.vercel.app/sales
+GET https://legoproject-5ioiubfoz-tjoliot-30s-projects.vercel.app/sales
 
 Search for current Vinted sales for a given lego set id
 
@@ -59,7 +59,7 @@ const setCurrentDeals = ({ result, meta }) => {
 const fetchDeals = async ({ legoSetId = '', size = 12, filterBy = '', page = 1 } = {}) => {
   try {
     const response = await fetch(
-      `http://localhost:8092/deals/search?limit=${size}&legoSetId=${legoSetId}&filterBy=${filterBy}&page=${page}`
+      `https://legoproject-5ioiubfoz-tjoliot-30s-projects.vercel.app/deals/search?limit=${size}&legoSetId=${legoSetId}&filterBy=${filterBy}&page=${page}`
     );
     const body = await response.json();
 
@@ -85,12 +85,12 @@ const renderDeals = (deals, pagination) => {
     .map(deal => {
       const isFavorite = favoriteDeals.some(d => d.uuid === deal.uuid);
       const favIcon = isFavorite ? '❤️' : '🤍';
-      
+
       // Primary photo from scraper
       const primaryPhoto = deal.photo;
       // Fallback photo from Brickset (predictable CDN)
       const fallbackPhoto = deal.id ? `https://images.brickset.com/sets/images/${deal.id}-1.jpg` : 'https://via.placeholder.com/300x200?text=No+Image';
-      
+
       const photoUrl = primaryPhoto || fallbackPhoto;
       const temperatureHtml = deal.temperature ? `<span class="heat">🔥 ${deal.temperature}°</span>` : '';
       const commentHtml = deal.comments !== undefined ? `<span class="comments">💬 ${deal.comments}</span>` : '';
@@ -147,7 +147,7 @@ const renderPagination = pagination => {
  * @param  {Array} lego set ids
  */
 const renderLegoSetIds = deals => {
-  const ids = getIdsFromDeals(deals);
+  const ids = Array.from(new Set(deals.map(d => d.id))).filter(id => id);
   const options = ids.map(id =>
     `<option value="${id}">${id}</option>`
   ).join('');
@@ -206,15 +206,14 @@ selectPage.addEventListener('change', async (event) => {
 
 /**
  * Feature 2 - Filter by best discount
- * Filter the current deals to keep only the ones with > 50% discount
  */
 // We select the "By best discount" button (it's the first span in the #filters box)
 const filterBestDiscount = document.querySelector('#filters span:nth-child(1)');
 
 filterBestDiscount.addEventListener('click', async () => {
-  const deals = await fetchDeals({ 
+  const deals = await fetchDeals({
     size: parseInt(selectShow.value),
-    filterBy: 'best-discount' 
+    filterBy: 'best-discount'
   });
 
   setCurrentDeals(deals);
@@ -223,15 +222,14 @@ filterBestDiscount.addEventListener('click', async () => {
 
 /**
  * Feature 3 - Filter by most commented
- * Filter the current deals to keep only the ones with > 5 comments
  */
 // We select the "By most commented" button (it's the second span in the #filters box)
 const filterMostCommented = document.querySelector('#filters span:nth-child(2)');
 
 filterMostCommented.addEventListener('click', async () => {
-  const deals = await fetchDeals({ 
+  const deals = await fetchDeals({
     size: parseInt(selectShow.value),
-    filterBy: 'most-commented' 
+    filterBy: 'most-commented'
   });
 
   setCurrentDeals(deals);
@@ -240,61 +238,34 @@ filterMostCommented.addEventListener('click', async () => {
 
 /**
  * Feature 4 - Filter by hot deals
- * Filter the current deals to keep only the hot ones (temperature > 100)
  */
-// 1. SELECT THE ELEMENT
-// We look for the 3rd <span> inside the <div id="filters"> in the HTML
 const filterHotDeals = document.querySelector('#filters span:nth-child(3)');
 
-// 2. LISTEN FOR CLICKS
 filterHotDeals.addEventListener('click', () => {
-  // 3. FILTER THE DATA
-  // We create a new list called 'hotDeals'
-  const hotDeals = currentDeals.filter(deal => {
-    // We keep the deal only if its temperature is greater than 100 degrees
-    // (We assume the API gives us a property called 'temperature' or 'heat')
-    // Note: If this doesn't work, we might need to check the exact property name from the API data
-    return deal.temperature > 100;
-  });
-
-  // 4. UPDATE THE UI
-  // We redraw the page with only the hot deals
+  const hotDeals = currentDeals.filter(deal => deal.temperature > 100);
   render(hotDeals, currentPagination);
 });
 
 /**
- * Feature 5 - Sort by price
- * Feature 6 - Sort by date
+ * Sort Listeners
  */
-// 1. SELECT THE ELEMENT
 const selectSort = document.querySelector('#sort-select');
 
-// 2. LISTEN FOR CHANGES
 selectSort.addEventListener('change', (event) => {
-  // 3. GET THE SELECTED VALUE
   const sortValue = event.target.value;
-
-  // 4. CREATE A COPY TO SORT
-  // We use [...currentDeals] to make a copy so we don't mess up the original order permanently
   const sortedDeals = [...currentDeals];
 
-  // 5. SORT THE DATA BASED ON SELECTION
   switch (sortValue) {
     case 'price-asc':
-      // Cheaper First: Small -> Big
       sortedDeals.sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
       break;
     case 'price-desc':
-      // Expensive First: Big -> Small
       sortedDeals.sort((a, b) => parseFloat(b.price) - parseFloat(a.price));
       break;
     case 'date-asc':
-      // Recently published: New -> Old (Descending Date)
-      // We convert the date string to a Date object to compare numbers
       sortedDeals.sort((a, b) => new Date(b.published) - new Date(a.published));
       break;
     case 'date-desc':
-      // Anciently published: Old -> New (Ascending Date)
       sortedDeals.sort((a, b) => new Date(a.published) - new Date(b.published));
       break;
     case 'profit-desc':
@@ -306,19 +277,15 @@ selectSort.addEventListener('change', (event) => {
       break;
   }
 
-  // 6. UPDATE THE UI
   render(sortedDeals, currentPagination);
 });
 
 /**
  * Feature 7 - Display Vinted sales
- * Fetch and display sales from Vinted when a Lego Set ID is selected
  */
-
-// 1. function to fetch sales from the API
 const fetchSales = async (id) => {
   try {
-    const response = await fetch(`http://localhost:8092/sales/search?legoSetId=${id}`);
+    const response = await fetch(`https://legoproject-5ioiubfoz-tjoliot-30s-projects.vercel.app/sales/search?legoSetId=${id}`);
     const body = await response.json();
 
     if (body.success !== true) {
@@ -333,29 +300,17 @@ const fetchSales = async (id) => {
   }
 };
 
-// 2. LISTEN FOR CHANGES
 selectLegoSetIds.addEventListener('change', async (event) => {
-  // 3. GET THE SELECTED ID
   const legoSetId = event.target.value;
-
-  // 4. FETCH THE DATA
   const salesData = await fetchSales(legoSetId);
 
-  // We want to include the deals for this ID that are currently displayed
   const dealsForId = currentDeals.filter(deal => String(deal.id) === String(legoSetId));
-
-  // Indicators and statistics should rely ONLY on Vinted data (salesData.result)
   const combinedItems = salesData.result || [];
-  
-  // We keep the deals for the ID for the main display, but statistics use Vinted only
-  // The 'render' function doesn't care if it's a Deal or a Sale, as long as it has a title and price!
+
   setCurrentDeals({ result: [...dealsForId, ...combinedItems], meta: salesData.meta || {} });
 
-  // Feature 8 - Update the Number of Sales in the UI
-  // The 'result' array inside salesData contains all our sales, so we just count its length
   spanNbSales.innerHTML = salesData.result ? salesData.result.length : 0;
 
-  // Feature 10 - Lifetime value (Average days online)
   const now = Math.floor(Date.now() / 1000);
   const validDates = combinedItems.map(item => item.published).filter(d => typeof d === 'number' && !isNaN(d));
 
@@ -366,16 +321,11 @@ selectLegoSetIds.addEventListener('change', async (event) => {
   } else {
     spanLifetime.innerHTML = `0 days`;
   }
-  
-  // Feature 9 - Calculate average, p5, p25, p50
+
   if (combinedItems.length > 0) {
     const prices = combinedItems.map(item => parseFloat(item.price));
-    
-    // Average
     const average = prices.reduce((a, b) => a + b, 0) / prices.length;
     spanAverage.innerHTML = average.toFixed(2);
-
-    // Percentiles
     prices.sort((a, b) => a - b);
     spanP5.innerHTML = prices[Math.floor(prices.length * 0.05)];
     spanP25.innerHTML = prices[Math.floor(prices.length * 0.25)];
@@ -391,7 +341,7 @@ selectLegoSetIds.addEventListener('change', async (event) => {
 });
 
 /**
- * Feature 14 - Filter by favorite
+ * Filter Favorites
  */
 const filterFavorite = document.querySelector('#filters span:nth-child(4)');
 
@@ -406,23 +356,30 @@ const clearFilters = document.querySelector('#filters span:nth-child(5)');
 clearFilters.addEventListener('click', async () => {
   const deals = await fetchDeals({ size: parseInt(selectShow.value) });
   setCurrentDeals(deals);
-  
+
   const algoDetails = document.getElementById('algo-details');
   if (algoDetails) algoDetails.style.display = 'none';
+
+  // Reset indicators
+  spanNbSales.innerHTML = 0;
+  spanAverage.innerHTML = '0.00';
+  spanP5.innerHTML = '0.00';
+  spanP25.innerHTML = '0.00';
+  spanP50.innerHTML = '0.00';
+  spanLifetime.innerHTML = '0 days';
 
   render(currentDeals, currentPagination);
 });
 
 /**
- * Best Deals Button
+ * Best Deals Algorithm
  */
 const salesDataCache = {};
-
 const bestDealsBtn = document.querySelector('#best-deals-btn');
+
 bestDealsBtn.addEventListener('click', async () => {
   sectionDeals.innerHTML = '<p style="text-align:center;font-size:1.2rem;color:var(--lego-yellow);">⚙️ Calculating Lego Algorithm... Crunching API details...</p>';
 
-  // Fetch unique sales details to compute lifetime and actual Vinted popularity
   const uniqueIds = [...new Set(currentDeals.map(d => d.id))];
   for (const id of uniqueIds) {
     if (!salesDataCache[id]) {
@@ -431,29 +388,28 @@ bestDealsBtn.addEventListener('click', async () => {
     }
   }
 
-  // Calculate scores based on algorithmic weights
   const scoredDeals = currentDeals.map(deal => {
     const sales = salesDataCache[deal.id] || [];
-    
     const profitRatio = deal.discount || (deal.retail ? ((deal.retail - deal.price) / deal.retail * 100) : 0);
     const nbSales = sales.length;
-    
+
     let lifetime = 0;
     const allDates = [...sales.map(s => s.published), deal.published].filter(d => typeof d === 'number' && !isNaN(d));
-    
+
     if (allDates.length > 0) {
       const minDate = Math.min(...allDates);
       const maxDate = Math.max(...allDates);
       lifetime = Math.round((maxDate - minDate) / (60 * 60 * 24));
     } else {
-      lifetime = 365; // Penalize lack of sales/dates
+      lifetime = 365;
     }
-    const lifetimeScore = Math.max(0, 30 - lifetime); // Max score 30
+
+    const lifetimeScore = Math.max(0, 30 - lifetime);
     const heatScore = (deal.temperature || 0) / 10;
     const commentScore = (deal.comments || 0);
 
     const score = (profitRatio * 2.5) + (nbSales * 2.0) + (lifetimeScore * 1.0) + (heatScore * 1.0) + (commentScore * 0.5);
-    
+
     return { ...deal, score };
   });
 
@@ -474,16 +430,15 @@ bestDealsBtn.addEventListener('click', async () => {
     `;
   }
 
-  // Update select to reflect this behavior manually
   if (selectSort.querySelector('option[value="profit-desc"]')) {
-     selectSort.value = 'profit-desc';
+    selectSort.value = 'profit-desc';
   }
-  
+
   render(scoredDeals, currentPagination);
 });
 
 /**
- * Feature 13 - Save as favorite
+ * Favorites Listener
  */
 sectionDeals.addEventListener('click', (event) => {
   if (event.target.classList.contains('favorite-btn')) {
@@ -505,7 +460,6 @@ sectionDeals.addEventListener('click', (event) => {
 
 document.addEventListener('DOMContentLoaded', async () => {
   const deals = await fetchDeals({ size: 12 });
-
   setCurrentDeals(deals);
   render(currentDeals, currentPagination);
 });
