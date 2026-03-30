@@ -11,7 +11,6 @@ const __dirname = path.dirname(__filename);
 
 import { scrape as scrapeVinted } from './websites/vinted.js';
 
-
 const PORT = 8092;
 
 const app = express();
@@ -23,40 +22,48 @@ let DEALS = [];
 app.use(bodyParser.json());
 app.use(cors());
 app.use(helmet());
-app.use(cors())
 
 app.get('/', (request, response) => {
   response.send({'ack': true});
 });
 
-app.get('/deals/search', (request, response) => {
+app.get('/deals/search', async (request, response) => {
   try {
-    let { limit = 12, price, date, filterBy } = request.query;
+    let { limit = 12, page = 1, price, date, filterBy, legoSetId } = request.query;
     limit = parseInt(limit);
+    page = parseInt(page);
 
     let results = [...DEALS];
+
+    if (legoSetId) {
+      results = results.filter(deal => String(deal.id) === String(legoSetId) || String(deal.legoSetId) === String(legoSetId));
+    }
 
     if (price) {
       results = results.filter(deal => deal.price <= parseFloat(price));
     }
 
     if (date) {
-      // Assuming published is a timestamp in seconds
       const filterDate = new Date(date).getTime() / 1000;
       results = results.filter(deal => deal.published >= filterDate);
     }
 
     if (filterBy === 'best-discount') {
-      results.sort((a, b) => b.discount - a.discount);
+      results = results.filter(deal => (deal.discount || 0) >= 50);
+      results.sort((a, b) => (b.discount || 0) - (a.discount || 0));
     } else if (filterBy === 'most-commented') {
-      results.sort((a, b) => b.comments - a.comments);
+      results.sort((a, b) => (b.comments || 0) - (a.comments || 0));
     } else {
       results.sort((a, b) => a.price - b.price);
     }
 
     const total = results.length;
     const pageCount = Math.ceil(total / limit);
-    results = results.slice(0, limit);
+    
+    // Pagination slicing logic
+    const start = (page - 1) * limit;
+    const end = page * limit;
+    results = results.slice(start, end);
 
     return response.status(200).json({
       'success': true,
@@ -67,7 +74,7 @@ app.get('/deals/search', (request, response) => {
           limit,
           total,
           'count': total,
-          'currentPage': 1,
+          'currentPage': page,
           'pageCount': pageCount
         }
       }
@@ -136,6 +143,15 @@ app.get('/sales/search', async (request, response) => {
     const pageCount = Math.ceil(total / limit);
     results = results.slice(0, limit);
 
+    let officialRetail = null;
+    if (legoSetId) {
+       try {
+         officialRetail = await fetchLegoRetail(legoSetId);
+       } catch (e) {
+         console.warn(`⚠️ Failed to fetch retail for ${legoSetId}: ${e.message}`);
+       }
+    }
+
     return response.status(200).json({
       'success': true,
       'data': {
@@ -146,7 +162,8 @@ app.get('/sales/search', async (request, response) => {
           total,
           'count': total,
           'currentPage': 1,
-          'pageCount': pageCount
+          'pageCount': pageCount,
+          officialRetail
         }
       }
     });

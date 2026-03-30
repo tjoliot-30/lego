@@ -59,18 +59,33 @@ const parse = data => {
  */
 const parseAjouteText = (text) => {
   const now = Math.floor(Date.now() / 1000);
-  const dayInSec = 86400;
+  const minInSec = 60;
   const hourInSec = 3600;
+  const dayInSec = 86400;
   
   if (!text) return now;
+
+  const lowText = text.toLowerCase();
   
-  const digits = text.match(/\d+/);
-  const val = digits ? parseInt(digits[0]) : 1;
+  // Handle textual numbers
+  let val = 0;
+  const digits = lowText.match(/\d+/);
+  if (digits) {
+    val = parseInt(digits[0]);
+  } else if (lowText.includes('un') || lowText.includes('une')) {
+    val = 1;
+  } else if (lowText.includes('quelque')) {
+    val = 0.1; // "Quelques secondes/minutes"
+  } else {
+    val = 1; // Default
+  }
   
-  if (text.includes('heure')) return now - (val * hourInSec);
-  if (text.includes('jour')) return now - (val * dayInSec);
-  if (text.includes('semaine')) return now - (val * dayInSec * 7);
-  if (text.includes('mois')) return now - (val * dayInSec * 30);
+  if (lowText.includes('minute')) return now - (val * minInSec);
+  if (lowText.includes('heure')) return now - (val * hourInSec);
+  if (lowText.includes('jour')) return now - (val * dayInSec);
+  if (lowText.includes('semaine')) return now - (val * dayInSec * 7);
+  if (lowText.includes('mois')) return now - (val * dayInSec * 30);
+  if (lowText.includes('an')) return now - (val * dayInSec * 365);
   
   return now;
 };
@@ -84,19 +99,38 @@ const scrapeDetail = async (url) => {
   try {
     const response = await fetch(url, {
       "headers": {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": "https://www.vinted.fr/catalog",
+        "cookie": "anonymous-locale=fr; domain_selected=true;"
       }
     });
-    if (!response.ok) return null;
+
+    if (!response.ok) {
+      if (response.status === 403) console.warn(`⚠️ Vinted Detail 403: Bot protection at ${url}`);
+      return null;
+    }
+
     const body = await response.text();
     const $ = cheerio.load(body);
     
-    const ajouteText = $('.details-list__item:contains("Ajouté")').find('.details-list__item-value').text().trim();
+    // Use the data-testid confirmed by browser subagent
+    let ajouteText = $('[data-testid="item-attributes-added-at"]').text().trim();
+    
+    // Fallback to legacy selector
+    if (!ajouteText) {
+      ajouteText = $('.details-list__item:contains("Ajouté")').find('.details-list__item-value').text().trim();
+    }
+
+    if (!ajouteText) return null;
+
     return {
       'published': parseAjouteText(ajouteText),
       'ajouteText': ajouteText
     };
   } catch (error) {
+    console.error(`Error in scrapeDetail for ${url}:`, error);
     return null;
   }
 };
@@ -122,13 +156,18 @@ const scrape = async searchText => {
       const body = await response.text();
       const items = parse(body);
       
-      // Scrape detail for first 5 items to get better date info
-      const enrichedItems = await Promise.all(
-        items.slice(0, 5).map(async item => {
-          const detail = await scrapeDetail(`https://www.vinted.fr${item.link}`);
-          return detail ? { ...item, ...detail } : item;
-        })
-      );
+      // Scrape detail for first 5 items sequentially with a delay to avoid 403
+      const enrichedItems = [];
+      for (const item of items.slice(0, 5)) {
+        await new Promise(res => setTimeout(res, 800)); // Delay between requests
+        const detail = await scrapeDetail(`https://www.vinted.fr${item.link}`);
+        if (detail) {
+          enrichedItems.push({ ...item, ...detail });
+        } else {
+          // If we fail, we still keep the original but it has 'Now' published
+          enrichedItems.push(item);
+        }
+      }
       
       return [...enrichedItems, ...items.slice(5)];
     }

@@ -53,36 +53,34 @@ const setCurrentDeals = ({ result, meta }) => {
 
 /**
  * Fetch deals from api
- * @param  {Number}  [page=1] - current page to fetch
- * @param  {Number}  [size=12] - size of the page
+ * @param {Object} options - { legoSetId, size }
  * @return {Object}
  */
-const fetchDeals = async (page = 1, size = 6) => {
+const fetchDeals = async ({ legoSetId = '', size = 12, filterBy = '', page = 1 } = {}) => {
   try {
     const response = await fetch(
-      `http://localhost:8092/deals/search?limit=${size}`
+      `http://localhost:8092/deals/search?limit=${size}&legoSetId=${legoSetId}&filterBy=${filterBy}&page=${page}`
     );
     const body = await response.json();
 
     if (body.success !== true) {
       console.error(body);
-      return { currentDeals, currentPagination };
+      return { result: [], meta: {} };
     }
 
     return body.data;
   } catch (error) {
     console.error(error);
-    return { currentDeals, currentPagination };
+    return { result: [], meta: {} };
   }
 };
 
 /**
  * Render list of deals
  * @param  {Array} deals
+ * @param  {Object} pagination
  */
-const renderDeals = deals => {
-  const fragment = document.createDocumentFragment();
-  // Don't wrap all deals in a single div snippet, insert them directly into grid
+const renderDeals = (deals, pagination) => {
   const template = deals
     .map(deal => {
       const isFavorite = favoriteDeals.some(d => d.uuid === deal.uuid);
@@ -95,6 +93,7 @@ const renderDeals = deals => {
       
       const photoUrl = primaryPhoto || fallbackPhoto;
       const temperatureHtml = deal.temperature ? `<span class="heat">🔥 ${deal.temperature}°</span>` : '';
+      const commentHtml = deal.comments !== undefined ? `<span class="comments">💬 ${deal.comments}</span>` : '';
       const discountHtml = deal.discount ? `<span class="discount-badge">-${deal.discount}%</span>` : '';
       const retailHtml = deal.retail ? `<span class="retail">${deal.retail}€</span>` : '';
       const scoreBadge = (deal.score !== undefined) ? `<div style="background-color: var(--lego-yellow); color: #121212; padding: 4px 8px; border-radius: 4px; font-weight: bold; margin-bottom: 10px; display: inline-block;">Score: ${Math.round(deal.score)}</div>` : '';
@@ -108,6 +107,7 @@ const renderDeals = deals => {
           <div class="deal-meta">
             <span>ID: ${deal.id}</span>
             ${temperatureHtml}
+            ${commentHtml}
           </div>
           <div class="deal-price-row">
             <span class="price">${deal.price}€</span>
@@ -124,6 +124,7 @@ const renderDeals = deals => {
     .join('');
 
   sectionDeals.innerHTML = template;
+  spanNbDeals.innerHTML = deals.length;
 };
 
 /**
@@ -133,12 +134,12 @@ const renderDeals = deals => {
 const renderPagination = pagination => {
   const { currentPage, pageCount } = pagination;
   const options = Array.from(
-    { 'length': pageCount },
+    { 'length': pageCount || 0 },
     (value, index) => `<option value="${index + 1}">${index + 1}</option>`
   ).join('');
 
   selectPage.innerHTML = options;
-  selectPage.selectedIndex = currentPage - 1;
+  selectPage.selectedIndex = (currentPage || 1) - 1;
 };
 
 /**
@@ -165,7 +166,9 @@ const renderIndicators = pagination => {
 };
 
 const render = (deals, pagination) => {
-  renderDeals(deals);
+  console.log('Rendering Deals:', deals);
+  console.log('Pagination / Meta Data:', pagination);
+  renderDeals(deals, pagination);
   renderPagination(pagination);
   renderIndicators(pagination);
   renderLegoSetIds(deals)
@@ -179,7 +182,7 @@ const render = (deals, pagination) => {
  * Select the number of deals to display
  */
 selectShow.addEventListener('change', async (event) => {
-  const deals = await fetchDeals(currentPagination.currentPage, parseInt(event.target.value));
+  const deals = await fetchDeals({ size: parseInt(event.target.value) });
 
   setCurrentDeals(deals);
   render(currentDeals, currentPagination);
@@ -190,17 +193,9 @@ selectShow.addEventListener('change', async (event) => {
  * Select the page to display
  */
 selectPage.addEventListener('change', async (event) => {
-  // 1. We get the new page number the user selected
   const newPage = parseInt(event.target.value);
-
-  // 2. We also need to know how many deals per page the user wants (6, 12, or 24)
-  // We get this from the 'show' selector we used in Feature 0
   const size = parseInt(selectShow.value);
-
-  // 3. We fetch the new data from the API with:
-  // - The new page number
-  // - The current page size
-  const deals = await fetchDeals(newPage, size);
+  const deals = await fetchDeals({ size, page: newPage });
 
   // 4. We update our global variables with the new data
   setCurrentDeals(deals);
@@ -216,21 +211,14 @@ selectPage.addEventListener('change', async (event) => {
 // We select the "By best discount" button (it's the first span in the #filters box)
 const filterBestDiscount = document.querySelector('#filters span:nth-child(1)');
 
-filterBestDiscount.addEventListener('click', () => {
-  // 1. We create a new list of deals by filtering the current one
-  // The .filter() function goes through every deal
-  const bestDeals = currentDeals.filter(deal => {
-    // Log the discount to see what values we have (Open your browser console to see this!)
-    // console.log('Deal:', deal.title, 'Discount:', deal.discount);
-
-    // We keep the deal only if the discount is bigger than 30% (lowered from 50% to find more results)
-    // Note: We ensure 'deal.discount' exists; some API items might be missing it.
-    return deal.discount > 30;
+filterBestDiscount.addEventListener('click', async () => {
+  const deals = await fetchDeals({ 
+    size: parseInt(selectShow.value),
+    filterBy: 'best-discount' 
   });
 
-  // 2. We update the screen with our filtered list
-  // We pass the currentPagination because we haven't changed pages, just filtered what we see
-  render(bestDeals, currentPagination);
+  setCurrentDeals(deals);
+  render(currentDeals, currentPagination);
 });
 
 /**
@@ -240,17 +228,14 @@ filterBestDiscount.addEventListener('click', () => {
 // We select the "By most commented" button (it's the second span in the #filters box)
 const filterMostCommented = document.querySelector('#filters span:nth-child(2)');
 
-filterMostCommented.addEventListener('click', () => {
-  // 1. We create a new list of deals by filtering the current one
-  // The .filter() function goes through every deal
-  const commentedDeals = currentDeals.filter(deal => {
-    // We keep the deal only if the number of comments is bigger than 15
-    // Note: We confirm that 'deal.comments' exists in the data
-    return deal.comments > 5;
+filterMostCommented.addEventListener('click', async () => {
+  const deals = await fetchDeals({ 
+    size: parseInt(selectShow.value),
+    filterBy: 'most-commented' 
   });
 
-  // 2. We update the screen with our filtered list
-  render(commentedDeals, currentPagination);
+  setCurrentDeals(deals);
+  render(currentDeals, currentPagination);
 });
 
 /**
@@ -419,8 +404,7 @@ filterFavorite.addEventListener('click', () => {
  */
 const clearFilters = document.querySelector('#filters span:nth-child(5)');
 clearFilters.addEventListener('click', async () => {
-  // Re-fetch using original pagination values or just re-render current state without filters
-  const deals = await fetchDeals(currentPagination.currentPage, parseInt(selectShow.value));
+  const deals = await fetchDeals({ size: parseInt(selectShow.value) });
   setCurrentDeals(deals);
   
   const algoDetails = document.getElementById('algo-details');
@@ -468,7 +452,7 @@ bestDealsBtn.addEventListener('click', async () => {
     const heatScore = (deal.temperature || 0) / 10;
     const commentScore = (deal.comments || 0);
 
-    const score = (profitRatio * 1.5) + (nbSales * 2.0) + (lifetimeScore * 1.0) + (heatScore * 2.0) + (commentScore * 0.5);
+    const score = (profitRatio * 2.5) + (nbSales * 2.0) + (lifetimeScore * 1.0) + (heatScore * 1.0) + (commentScore * 0.5);
     
     return { ...deal, score };
   });
@@ -480,12 +464,11 @@ bestDealsBtn.addEventListener('click', async () => {
     algoDetails.style.display = 'block';
     algoDetails.innerHTML = `
       <h3 style="color:var(--lego-red); margin-top:0;">📊 Algorithm Deep Dive: How the Score is Calculated</h3>
-      <p style="margin-bottom:10px;">We've analyzed your current view and ranked the sets out of 100+ points using the following metrics (sorted by score):</p>
       <ul style="line-height:1.6; color:var(--text-main);">
-        <li><strong style="color:var(--lego-yellow)">Profit Proportion (x1.5):</strong> Deals natively priced lower than their retail worth grab an active profitability boost.</li>
+        <li><strong style="color:var(--lego-yellow)">Profit Proportion (x2.5):</strong> Deals natively priced lower than their retail worth grab an active profitability boost.</li>
         <li><strong style="color:var(--lego-yellow)">Number of Sales (x2.0):</strong> We actively pinged Vinted! Sets that feature higher actual sales volume are highly boosted. High volume = massive brand interest!</li>
         <li><strong style="color:var(--lego-yellow)">Lifetime Value Velocity (x1.0):</strong> Sets that were pushed online recently and sold easily score high. If no one buys it (0 sales within 365 days) it gets drastically penalized.</li>
-        <li><strong style="color:var(--lego-yellow)">Temperature / Heat (x0.2):</strong> A raw indicator of the Dealabs community hype metrics.</li>
+        <li><strong style="color:var(--lego-yellow)">Temperature / Heat (x1.0):</strong> A raw indicator of the Dealabs community hype metrics.</li>
         <li><strong style="color:var(--lego-yellow)">Community Support (x0.5):</strong> The raw number of comments attached natively to this deal listing.</li>
       </ul>
     `;
@@ -521,7 +504,7 @@ sectionDeals.addEventListener('click', (event) => {
 });
 
 document.addEventListener('DOMContentLoaded', async () => {
-  const deals = await fetchDeals();
+  const deals = await fetchDeals({ size: 12 });
 
   setCurrentDeals(deals);
   render(currentDeals, currentPagination);
