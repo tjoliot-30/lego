@@ -86,12 +86,12 @@ const renderDeals = (deals, pagination) => {
     .map(deal => {
       const isFavorite = favoriteDeals.some(d => d.uuid === deal.uuid);
       const favIcon = isFavorite ? '❤️' : '🤍';
-      
+
       // Primary photo from scraper
       const primaryPhoto = deal.photo;
       // Fallback photo from Brickset (predictable CDN)
       const fallbackPhoto = deal.id ? `https://images.brickset.com/sets/images/${deal.id}-1.jpg` : 'https://via.placeholder.com/300x200?text=No+Image';
-      
+
       const photoUrl = primaryPhoto || fallbackPhoto;
       const temperatureHtml = deal.temperature ? `<span class="heat">🔥 ${deal.temperature}°</span>` : '';
       const commentHtml = deal.comments !== undefined ? `<span class="comments">💬 ${deal.comments}</span>` : '';
@@ -298,7 +298,7 @@ selectLegoSetIds.addEventListener('change', async (event) => {
 
   spanNbSales.innerHTML = salesData.result ? salesData.result.length : 0;
   spanNbComments.innerHTML = dealsForId.reduce((sum, deal) => sum + (deal.comments || 0), 0);
-  
+
   if (combinedItems.length > 0) {
     const prices = combinedItems.map(item => parseFloat(item.price));
     const average = prices.reduce((a, b) => a + b, 0) / prices.length;
